@@ -1,5 +1,6 @@
 package co.analisys.biblioteca.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -15,6 +16,7 @@ import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.access.AccessDeniedHandler;
 
 import java.time.Instant;
+import java.util.Map;
 
 @Configuration
 @EnableWebSecurity
@@ -29,8 +31,7 @@ public class SecurityConfig {
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/swagger-resources/**", "/webjars/**").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
-                        .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())))
-                .exceptionHandling(ex -> ex
+                        .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
                         .authenticationEntryPoint(customAuthenticationEntryPoint())
                         .accessDeniedHandler(customAccessDeniedHandler())
                 );
@@ -46,34 +47,32 @@ public class SecurityConfig {
     @Bean
     public AuthenticationEntryPoint customAuthenticationEntryPoint() {
         return (request, response, authException) -> {
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setContentType("application/json");
-            response.getWriter().write("""
-                {
-                  "timestamp": "%s",
-                  "status": 401,
-                  "error": "UNAUTHORIZED",
-                  "message": "No autenticado o token inválido/expirado",
-                  "path": "%s"
-                }
-                """.formatted(Instant.now(), request.getRequestURI()));
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+
+            var body = Map.of(
+                    "error", "Unauthorized",
+                    "message", authException.getMessage(),
+                    "path", request.getRequestURI()
+            );
+
+            new ObjectMapper().writeValue(response.getOutputStream(), body);
         };
     }
 
     @Bean
     public AccessDeniedHandler customAccessDeniedHandler() {
         return (request, response, accessDeniedException) -> {
-            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
             response.setContentType("application/json");
-            response.getWriter().write("""
-                {
-                  "timestamp": "%s",
-                  "status": 403,
-                  "error": "FORBIDDEN",
-                  "message": "Acceso denegado. No tienes permisos.",
-                  "path": "%s"
-                }
-                """.formatted(Instant.now(), request.getRequestURI()));
+            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+
+            var body = Map.of(
+                    "error", "Forbidden",
+                    "message", "No tiene permisos para acceder a este recurso",
+                    "path", request.getRequestURI()
+            );
+
+            new ObjectMapper().writeValue(response.getOutputStream(), body);
         };
     }
 }
